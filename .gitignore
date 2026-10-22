@@ -1,0 +1,16 @@
+# Local database credentials and environment settings
+dbInfo.ini
+dbInfo.local.ini
+.env
+.env.*
+!.env.example
+.pgpass
+pgpass.conf
+
+# Local IDE settings and generated runtime files
+.idea/
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+tmp/
