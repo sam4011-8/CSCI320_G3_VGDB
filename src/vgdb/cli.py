@@ -136,19 +136,19 @@ class Console:
                 return
             try:
                 if choice == 'n':
-                    print('Created:', self.service.create_collection(uid, input('Collection name: '))['collectionid'])
+                    print('Created:', self.service.create_collection(uid, input('Collection name: '))['collection_id'])
                 elif choice == 'e':
                     self.service.rename_collection(uid, number('Collection ID: '), input('New name: '))
                     print('Renamed.')
                 elif choice == 'd':
-                    collectionid = number('Collection ID: ')
+                    collection_id = number('Collection ID: ')
                     if input('Delete this collection and its memberships? Type yes: ').strip().lower() == 'yes':
-                        self.service.delete_collection(uid, collectionid)
+                        self.service.delete_collection(uid, collection_id)
                         print('Deleted.')
                 elif choice == 'a':
-                    collectionid, game_id = number('Collection ID: '), number('Game ID: ')
+                    collection_id, game_id = number('Collection ID: '), number('Game ID: ')
                     display(self.service.platforms())
-                    owned = self.service.add_game(uid, collectionid, game_id, number('Selected platform ID: '))
+                    owned = self.service.add_game(uid, collection_id, game_id, number('Selected platform ID: '))
                     if not owned:
                         print('Warning: you do not own the selected platform. The game was added as allowed.')
                     else:

@@ -53,19 +53,19 @@ REQUIRED_COLUMNS = {
     'User': {'uid', 'username', 'email', 'first_name', 'last_name', 'creation_date', 'password_hash'},
     'Game': {'game_id', 'game_name', 'esrb_rating'},
     'AccessDate': {'uid', 'access_date'},
-    'collection': {'uid', 'collectionid', 'collection_name'},
-    'contributor': {'contributorid', 'contributor_name'},
-    'following': {'uid', 'followed_id'},
-    'genre': {'genre_id', 'genre_name'},
-    'genreclassification': {'game_id', 'genre_id'},
-    'platform': {'platformid', 'platform_name'},
-    'rating': {'uid', 'game_id', 'rating'},
-    'plays': {'uid', 'game_id', 'start_time', 'end_time'},
-    'onplatform': {'game_id', 'platformid', 'release_date', 'price'},
-    'platformsowned': {'uid', 'platformid'},
-    'collectionitem': {'collectionid', 'game_id'},
-    'developed': {'contributorid', 'game_id'},
-    'published': {'contributorid', 'game_id'},
+    'Collection': {'uid', 'collection_id', 'collection_name'},
+    'Contributor': {'contributor_id', 'contributor_name'},
+    'Following': {'uid', 'followed_id'},
+    'Genre': {'genre_id', 'genre_name'},
+    'GenreClassification': {'game_id', 'genre_id'},
+    'Platform': {'platform_id', 'platform_name'},
+    'Rating': {'uid', 'game_id', 'rating'},
+    'Plays': {'uid', 'game_id', 'start_time', 'end_time'},
+    'OnPlatform': {'game_id', 'platform_id', 'release_date', 'price'},
+    'PlatformsOwned': {'uid', 'platform_id'},
+    'CollectionItem': {'collection_id', 'game_id'},
+    'Developed': {'contributor_id', 'game_id'},
+    'Published': {'contributor_id', 'game_id'},
 }
 
 
@@ -120,7 +120,7 @@ class Database:
         issues = [f'{table}.{column} is missing' for table, names in REQUIRED_COLUMNS.items()
                   for column in sorted(names) if (table, column) not in actual]
         for table, column in [('AccessDate', 'access_date'), ('User', 'creation_date'),
-                              ('plays', 'start_time'), ('plays', 'end_time')]:
+                              ('Plays', 'start_time'), ('Plays', 'end_time')]:
             if (table, column) in actual and actual[table, column] != 'timestamp with time zone':
                 issues.append(f'{table}.{column} must be TIMESTAMPTZ')
         if issues:

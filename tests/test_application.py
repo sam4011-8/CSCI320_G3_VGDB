@@ -65,7 +65,7 @@ class ApplicationTests(unittest.TestCase):
         for method,args in [('add_game',(1,9,2,3)),('remove_game',(1,9,2))]:
             with self.assertRaisesRegex(AppError,'not found'):
                 getattr(Service(db),method)(*args)
-        self.assertTrue(all('SELECT collectionid' in query for query,_ in db.calls))
+        self.assertTrue(all('SELECT collection_id' in query for query,_ in db.calls))
 
     def test_search_keeps_values_out_of_sql_and_whitelists_sort(self):
         term="x' OR TRUE --%_"
