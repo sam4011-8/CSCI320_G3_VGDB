@@ -66,10 +66,10 @@ def search_query(filters, uid, sort='default', descending=False, offset=0):
             if field == 'title':
                 conditions.append(f'{expression} ILIKE %({field})s')
             else:
-                conditions.append('EXISTS (SELECT 1 FROM developed d JOIN contributor c USING (contributorid) '
+                conditions.append('EXISTS (SELECT 1 FROM Developed d JOIN Contributor c USING (contributor_id) '
                                   f'WHERE d.game_id=g.game_id AND {expression} ILIKE %({field})s)')
     if filters.genre is not None:
-        conditions.append('EXISTS (SELECT 1 FROM genreclassification gc '
+        conditions.append('EXISTS (SELECT 1 FROM GenreClassification gc '
                           'WHERE gc.game_id=g.game_id AND gc.genre_id=%(genre)s)')
     offer_conditions = []
     for field, expression in [('platform', 'op.platformid ='), ('date_from', 'op.release_date >='),
@@ -78,7 +78,7 @@ def search_query(filters, uid, sort='default', descending=False, offset=0):
         if params[field] is not None:
             offer_conditions.append(f'{expression} %({field})s')
     if offer_conditions:
-        conditions.append('EXISTS (SELECT 1 FROM onplatform op WHERE op.game_id=g.game_id AND ' +
+        conditions.append('EXISTS (SELECT 1 FROM OnPlatform op WHERE op.game_id=g.game_id AND ' +
                           ' AND '.join(offer_conditions) + ')')
     where = ' AND '.join(conditions) if conditions else 'TRUE'
     if sort == 'default':
@@ -95,29 +95,29 @@ FROM "Game" g
 LEFT JOIN LATERAL (
     SELECT string_agg(DISTINCT p.platform_name, ', ' ORDER BY p.platform_name) AS platforms,
            MIN(op.release_date) AS release_date, MIN(op.price) AS min_price
-    FROM onplatform op JOIN platform p USING (platformid) WHERE op.game_id=g.game_id
+    FROM "OnPlatform" op JOIN "Platform" p USING (platform_id) WHERE op.game_id=g.game_id
 ) offers ON TRUE
 LEFT JOIN LATERAL (
     SELECT string_agg(DISTINCT c.contributor_name, ', ' ORDER BY c.contributor_name) AS names
-    FROM developed d JOIN contributor c USING (contributorid) WHERE d.game_id=g.game_id
+    FROM "Developed" d JOIN "Contributor" c USING (contributor_id) WHERE d.game_id=g.game_id
 ) dev ON TRUE
 LEFT JOIN LATERAL (
     SELECT string_agg(DISTINCT c.contributor_name, ', ' ORDER BY c.contributor_name) AS names
-    FROM published p JOIN contributor c USING (contributorid) WHERE p.game_id=g.game_id
+    FROM "Published" p JOIN "Contributor" c USING (contributor_id) WHERE p.game_id=g.game_id
 ) pub ON TRUE
 LEFT JOIN LATERAL (
     SELECT string_agg(DISTINCT ge.genre_name, ', ' ORDER BY ge.genre_name) AS genres,
            MIN(ge.genre_name) AS first_genre
-    FROM genreclassification gc JOIN genre ge USING (genre_id) WHERE gc.game_id=g.game_id
+    FROM "GenreClassification" gc JOIN "Genre" ge USING (genre_id) WHERE gc.game_id=g.game_id
 ) categories ON TRUE
 LEFT JOIN LATERAL (
     SELECT SUM(EXTRACT(EPOCH FROM (end_time-start_time))) AS seconds
-    FROM plays WHERE game_id=g.game_id AND uid=%(uid)s
+    FROM "Plays" WHERE game_id=g.game_id AND uid=%(uid)s
 ) played ON TRUE
 LEFT JOIN LATERAL (
     SELECT ROUND(AVG(rating),2) AS average_rating,
            MAX(rating) FILTER (WHERE uid=%(uid)s) AS my_rating
-    FROM rating WHERE game_id=g.game_id
+    FROM "Rating" WHERE game_id=g.game_id
 ) stars ON TRUE
 WHERE ''' + where + ' ORDER BY ' + ordering + ' LIMIT %(limit)s OFFSET %(offset)s'
     return query, params
@@ -146,7 +146,7 @@ class Service:
             if not user or not verify_password(user['password_hash'], password):
                 raise AppError('Invalid username or password.')
             if hasher.check_needs_rehash(user['password_hash']):
-                self.db.run('UPDATE "User" SET password_hash=%s WHERE uid=%s',
+                self.db.run('UPDATE "User" SET password_hash = %s WHERE uid=%s',
                             (hasher.hash(password), user['uid']))
             self.db.run('INSERT INTO "AccessDate" (uid,access_date) VALUES (%s,clock_timestamp())', (user['uid'],))
             return {'uid': user['uid'], 'username': user['username']}
@@ -155,57 +155,57 @@ class Service:
         return self.db.rows('''
 WITH times AS (
     SELECT game_id,SUM(EXTRACT(EPOCH FROM (end_time-start_time))) AS seconds
-    FROM plays WHERE uid=%s GROUP BY game_id
+    FROM "Plays" WHERE uid=%s GROUP BY game_id
 )
-SELECT c.collectionid,c.collection_name,COUNT(ci.game_id) AS game_count,
+SELECT c.collection_id,c.collection_name,COUNT(ci.game_id) AS game_count,
        COALESCE(SUM(t.seconds),0)::BIGINT AS total_seconds
-FROM collection c LEFT JOIN collectionitem ci USING (collectionid)
+FROM "Collection" c LEFT JOIN "CollectionItem" ci USING (collection_id)
 LEFT JOIN times t ON t.game_id=ci.game_id WHERE c.uid=%s
-GROUP BY c.collectionid,c.collection_name ORDER BY c.collection_name,c.collectionid''', (uid, uid))
+GROUP BY c.collection_id,c.collection_name ORDER BY c.collection_name,c.collection_id''', (uid, uid))
 
     def create_collection(self, uid, name):
         with self.db.transaction():
-            return self.db.one('INSERT INTO collection (uid,collection_name) VALUES (%s,%s) '
-                               'RETURNING collectionid', (uid, required(name, 'Collection name')))
+            return self.db.one('INSERT INTO "Collection" (uid,collection_name) VALUES (%s,%s) '
+                               'RETURNING collection_id', (uid, required(name, 'Collection name')))
 
-    def _owned(self, uid, collectionid):
-        if not self.db.one('SELECT collectionid FROM collection WHERE uid=%s AND collectionid=%s FOR UPDATE',
-                           (uid, collectionid)):
+    def _owned(self, uid, collection_id):
+        if not self.db.one('SELECT collection_id FROM "Collection" WHERE uid=%s AND collection_id=%s FOR UPDATE',
+                           (uid, collection_id)):
             raise AppError('Collection not found in your account.')
 
-    def rename_collection(self, uid, collectionid, name):
+    def rename_collection(self, uid, collection_id, name):
         with self.db.transaction():
-            if not self.db.run('UPDATE collection SET collection_name=%s WHERE uid=%s AND collectionid=%s',
-                               (required(name, 'Collection name'), uid, collectionid)):
+            if not self.db.run('UPDATE "Collection" SET collection_name = %s WHERE uid=%s AND collection_id=%s',
+                               (required(name, 'Collection name'), uid, collection_id)):
                 raise AppError('Collection not found in your account.')
 
-    def delete_collection(self, uid, collectionid):
+    def delete_collection(self, uid, collection_id):
         with self.db.transaction():
-            if not self.db.run('DELETE FROM collection WHERE uid=%s AND collectionid=%s', (uid, collectionid)):
+            if not self.db.run('DELETE FROM "Collection" WHERE uid=%s AND collection_id=%s', (uid, collection_id)):
                 raise AppError('Collection not found in your account.')
 
-    def add_game(self, uid, collectionid, game_id, platformid):
+    def add_game(self, uid, collection_id, game_id, platform_id):
         with self.db.transaction():
-            self._owned(uid, collectionid)
-            offer = self.db.one('SELECT EXISTS (SELECT 1 FROM platformsowned WHERE uid=%s AND platformid=%s) '
-                                'AS owned FROM onplatform WHERE game_id=%s AND platformid=%s',
-                                (uid, platformid, game_id, platformid))
+            self._owned(uid, collection_id)
+            offer = self.db.one('SELECT EXISTS (SELECT 1 FROM "PlatformsOwned" WHERE uid=%s AND platform_id=%s) '
+                                'AS owned FROM "OnPlatform" WHERE game_id=%s AND platform_id=%s',
+                                (uid, platform_id, game_id, platform_id))
             if not offer:
                 raise AppError('That game is not available on the selected platform.')
-            self.db.run('INSERT INTO collectionitem (collectionid,game_id) VALUES (%s,%s)', (collectionid, game_id))
+            self.db.run('INSERT INTO "CollectionItem" (collection_id,game_id) VALUES (%s,%s)', (collection_id, game_id))
             return offer['owned']
 
-    def remove_game(self, uid, collectionid, game_id):
+    def remove_game(self, uid, collection_id, game_id):
         with self.db.transaction():
-            self._owned(uid, collectionid)
-            if not self.db.run('DELETE FROM collectionitem WHERE collectionid=%s AND game_id=%s',
-                               (collectionid, game_id)):
+            self._owned(uid, collection_id)
+            if not self.db.run('DELETE FROM "CollectionItem" WHERE collection_id=%s AND game_id=%s',
+                               (collection_id, game_id)):
                 raise AppError('Game is not in that collection.')
 
-    def random_game(self, uid, collectionid):
-        game = self.db.one('SELECT g.game_id,g.game_name FROM collection c '
-                           'JOIN collectionitem ci USING (collectionid) JOIN "Game" g USING (game_id) '
-                           'WHERE c.uid=%s AND c.collectionid=%s ORDER BY random() LIMIT 1', (uid, collectionid))
+    def random_game(self, uid, collection_id):
+        game = self.db.one('SELECT g.game_id,g.game_name FROM "Collection" c '
+                           'JOIN "CollectionItem" ci USING (collection_id) JOIN "Game" g USING (game_id) '
+                           'WHERE c.uid=%s AND c.collection_id=%s ORDER BY random() LIMIT 1', (uid, collection_id))
         if not game:
             raise AppError('Collection is empty or not in your account.')
         return game
@@ -219,14 +219,14 @@ GROUP BY c.collectionid,c.collection_name ORDER BY c.collection_name,c.collectio
         if end <= start or end > datetime.now(timezone.utc):
             raise AppError('Record a completed session with an end after its start and no later than now.')
         with self.db.transaction():
-            self.db.run('INSERT INTO plays (uid,game_id,start_time,end_time) VALUES (%s,%s,%s,%s)',
+            self.db.run('INSERT INTO "Plays" (uid,game_id,start_time,end_time) VALUES (%s,%s,%s,%s)',
                         (uid, game_id, start, end))
 
     def rate(self, uid, game_id, rating):
         if isinstance(rating, bool) or not isinstance(rating, int) or not 1 <= rating <= 5:
             raise AppError('Choose an integer star rating from 1 to 5.')
         with self.db.transaction():
-            self.db.run('INSERT INTO rating (uid,game_id,rating) VALUES (%s,%s,%s) '
+            self.db.run('INSERT INTO "Rating" (uid,game_id,rating) VALUES (%s,%s,%s) '
                         'ON CONFLICT (uid,game_id) DO UPDATE SET rating=EXCLUDED.rating', (uid, game_id, rating))
 
     def search(self, uid, filters, sort='default', descending=False, offset=0):
@@ -237,27 +237,27 @@ GROUP BY c.collectionid,c.collection_name ORDER BY c.collection_name,c.collectio
         return self.db.rows('SELECT uid,username,email FROM "User" WHERE lower(email)=lower(%s)', (email.strip(),))
 
     def follows(self, uid):
-        return self.db.rows('SELECT u.uid,u.username,u.email FROM following f '
+        return self.db.rows('SELECT u.uid,u.username,u.email FROM "Following" f '
                             'JOIN "User" u ON u.uid=f.followed_id WHERE f.uid=%s ORDER BY u.username,u.uid', (uid,))
 
     def follow(self, uid, followed_id):
         if uid == followed_id:
             raise AppError('You cannot follow yourself.')
         with self.db.transaction():
-            self.db.run('INSERT INTO following (uid,followed_id) VALUES (%s,%s)', (uid, followed_id))
+            self.db.run('INSERT INTO "Following" (uid,followed_id) VALUES (%s,%s)', (uid, followed_id))
 
     def unfollow(self, uid, followed_id):
         with self.db.transaction():
-            if not self.db.run('DELETE FROM following WHERE uid=%s AND followed_id=%s', (uid, followed_id)):
+            if not self.db.run('DELETE FROM "Following" WHERE uid=%s AND followed_id=%s', (uid, followed_id)):
                 raise AppError('You are not following that user.')
 
     def platforms(self):
-        return self.db.rows('SELECT platformid,platform_name FROM platform ORDER BY platform_name')
+        return self.db.rows('SELECT platform_id,platform_name FROM "Platform" ORDER BY platform_name')
 
     def genres(self):
-        return self.db.rows('SELECT genre_id,genre_name FROM genre ORDER BY genre_name')
+        return self.db.rows('SELECT genre_id,genre_name FROM "Genre" ORDER BY genre_name')
 
-    def own_platform(self, uid, platformid):
+    def own_platform(self, uid, platform_id):
         with self.db.transaction():
-            self.db.run('INSERT INTO platformsowned (uid,platformid) VALUES (%s,%s) ON CONFLICT DO NOTHING',
-                        (uid, platformid))
+            self.db.run('INSERT INTO "PlatformsOwned" (uid,platform_id) VALUES (%s,%s) ON CONFLICT DO NOTHING',
+                        (uid, platform_id))
