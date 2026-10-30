@@ -66,19 +66,19 @@ def search_query(filters, uid, sort='default', descending=False, offset=0):
             if field == 'title':
                 conditions.append(f'{expression} ILIKE %({field})s')
             else:
-                conditions.append('EXISTS (SELECT 1 FROM Developed d JOIN Contributor c USING (contributor_id) '
+                conditions.append('EXISTS (SELECT 1 FROM "Developed" d JOIN Contributor c USING (contributor_id) '
                                   f'WHERE d.game_id=g.game_id AND {expression} ILIKE %({field})s)')
     if filters.genre is not None:
-        conditions.append('EXISTS (SELECT 1 FROM GenreClassification gc '
+        conditions.append('EXISTS (SELECT 1 FROM "GenreClassification" gc '
                           'WHERE gc.game_id=g.game_id AND gc.genre_id=%(genre)s)')
     offer_conditions = []
-    for field, expression in [('platform', 'op.platformid ='), ('date_from', 'op.release_date >='),
+    for field, expression in [('platform', 'op.platform_id ='), ('date_from', 'op.release_date >='),
                               ('date_to', 'op.release_date <='), ('price_min', 'op.price >='),
                               ('price_max', 'op.price <=')]:
         if params[field] is not None:
             offer_conditions.append(f'{expression} %({field})s')
     if offer_conditions:
-        conditions.append('EXISTS (SELECT 1 FROM OnPlatform op WHERE op.game_id=g.game_id AND ' +
+        conditions.append('EXISTS (SELECT 1 FROM "OnPlatform" op WHERE op.game_id=g.game_id AND ' +
                           ' AND '.join(offer_conditions) + ')')
     where = ' AND '.join(conditions) if conditions else 'TRUE'
     if sort == 'default':
