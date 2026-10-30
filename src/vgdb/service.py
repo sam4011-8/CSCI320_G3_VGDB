@@ -66,7 +66,7 @@ def search_query(filters, uid, sort='default', descending=False, offset=0):
             if field == 'title':
                 conditions.append(f'{expression} ILIKE %({field})s')
             else:
-                conditions.append('EXISTS (SELECT 1 FROM "Developed" d JOIN Contributor c USING (contributor_id) '
+                conditions.append('EXISTS (SELECT 1 FROM "Developed" d JOIN "Contributor" c USING (contributor_id) '
                                   f'WHERE d.game_id=g.game_id AND {expression} ILIKE %({field})s)')
     if filters.genre is not None:
         conditions.append('EXISTS (SELECT 1 FROM "GenreClassification" gc '
