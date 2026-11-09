@@ -151,6 +151,31 @@ class Service:
             self.db.run('INSERT INTO "AccessDate" (uid,access_date) VALUES (%s,clock_timestamp())', (user['uid'],))
             return {'uid': user['uid'], 'username': user['username']}
 
+    def profile(self, uid):
+        """Return account counts and up to ten personal games, rating first."""
+        profile = self.db.one('''
+SELECT u.uid, u.username,
+       (SELECT COUNT(*) FROM "Collection" c WHERE c.uid=u.uid) AS collection_count,
+       (SELECT COUNT(*) FROM "Following" f WHERE f.followed_id=u.uid) AS follower_count,
+       (SELECT COUNT(*) FROM "Following" f WHERE f.uid=u.uid) AS following_count
+FROM "User" u WHERE u.uid=%s''', (uid,))
+        if not profile:
+            raise AppError('User profile not found.')
+        profile['top_games'] = self.db.rows('''
+WITH played AS (
+    SELECT game_id, SUM(EXTRACT(EPOCH FROM (end_time-start_time)))::BIGINT AS play_seconds
+    FROM "Plays" WHERE uid=%s GROUP BY game_id
+), rated AS (
+    SELECT game_id, rating FROM "Rating" WHERE uid=%s
+)
+SELECT g.game_id, g.game_name, r.rating AS my_rating,
+       COALESCE(p.play_seconds,0)::BIGINT AS play_seconds
+FROM played p FULL JOIN rated r USING (game_id)
+JOIN "Game" g USING (game_id)
+ORDER BY my_rating DESC NULLS LAST, play_seconds DESC, g.game_name ASC, g.game_id ASC
+LIMIT 10''', (uid, uid))
+        return profile
+
     def collections(self, uid):
         return self.db.rows('''
 WITH times AS (

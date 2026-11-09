@@ -1,4 +1,4 @@
-"""Interactive Phase 2 CLI. SQL schema installation is always a separate action."""
+"""Interactive video game database CLI. Schema installation is a separate action."""
 import argparse
 from dataclasses import replace
 from datetime import date, datetime, timedelta, timezone
@@ -109,13 +109,13 @@ class Console:
         print('CSCI 320 Group 3 VGDB')
         while (user := self.login_menu()) is not None:
             while True:
-                choice = input('\n[c]ollections [g]ames [p]lay [r]ate [s]ocial '
+                choice = input('\n[v]iew profile [c]ollections [g]ames [p]lay [r]ate [s]ocial '
                                '[o]wned platforms [l]ogout [q]uit: ').strip().lower()
                 if choice == 'q':
                     return
                 if choice == 'l':
                     break
-                actions = {'c': self.collections, 'g': self.games, 'p': self.play,
+                actions = {'v': self.profile, 'c': self.collections, 'g': self.games, 'p': self.play,
                            'r': self.rate, 's': self.social, 'o': self.platforms}
                 if choice not in actions:
                     print('Choose one of the listed letters.')
@@ -124,6 +124,20 @@ class Console:
                     actions[choice](user['uid'])
                 except (ValueError, psycopg.Error) as error:
                     action_error(error)
+
+    def profile(self, uid):
+        profile = self.service.profile(uid)
+        print(f'\nProfile: {profile["username"]}')
+        print(f'Collections: {profile["collection_count"]}')
+        print(f'Followers: {profile["follower_count"]}')
+        print(f'Following: {profile["following_count"]}')
+        print('\nYour top 10 games (highest rating, then total playtime; unrated games last):')
+        if not profile['top_games']:
+            print('No games played or rated yet. Record a play to start your list.')
+        for rank, game in enumerate(profile['top_games'], 1):
+            rating = f'{game["my_rating"]}/5' if game['my_rating'] is not None else 'Not rated'
+            print(f'{rank}. {game["game_name"]} (ID {game["game_id"]}) | '
+                  f'Your rating: {rating} | Playtime: {hours_minutes(game["play_seconds"])}')
 
     def collections(self, uid):
         while True:
