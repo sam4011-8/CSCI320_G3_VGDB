@@ -110,13 +110,14 @@ class Console:
         print('CSCI 320 Group 3 VGDB')
         while (user := self.login_menu()) is not None:
             while True:
-                choice = input('\n[v]iew profile [t]op 20 popular [c]ollections [g]ames [p]lay [r]ate [s]ocial '
+                choice = input('\n[v]iew profile [t]op 20 popular [n]ew releases '
+                               '[c]ollections [g]ames [p]lay [r]ate [s]ocial '
                                '[o]wned platforms [l]ogout [q]uit: ').strip().lower()
                 if choice == 'q':
                     return
                 if choice == 'l':
                     break
-                actions = {'v': self.profile, 't': self.popularity,
+                actions = {'v': self.profile, 't': self.popularity, 'n': self.new_releases,
                            'c': self.collections, 'g': self.games, 'p': self.play,
                            'r': self.rate, 's': self.social, 'o': self.platforms}
                 if choice not in actions:
@@ -151,6 +152,18 @@ class Console:
         for rank, game in enumerate(games, 1):
             print(f'{rank}. {game["game_name"]} (ID {game["game_id"]}) | '
                   f'Players: {game["player_count"]} | '
+                  f'Capped playtime: {hours_minutes(game["capped_play_seconds"])}')
+
+    def new_releases(self, uid):
+        games = self.service.new_releases()
+        print('\nTop 5 new releases - current calendar month (UTC)')
+        print("Ranked by this month's distinct players, then playtime capped at "
+              f'{POPULARITY_CAP_HOURS} hours per player per game; latest releases break remaining ties.')
+        if not games:
+            print('No games have been released this calendar month yet.')
+        for rank, game in enumerate(games, 1):
+            print(f'{rank}. {game["game_name"]} (ID {game["game_id"]}) | '
+                  f'Released: {game["release_date"]} | Players: {game["player_count"]} | '
                   f'Capped playtime: {hours_minutes(game["capped_play_seconds"])}')
 
     def collections(self, uid):

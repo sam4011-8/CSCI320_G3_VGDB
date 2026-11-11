@@ -203,6 +203,46 @@ FROM popularity pop JOIN "Game" g USING (game_id)
 ORDER BY pop.player_count DESC, pop.capped_play_seconds DESC, g.game_name ASC, g.game_id ASC
 LIMIT 20''', (POPULARITY_DAYS, POPULARITY_CAP_HOURS * 3600))
 
+    def new_releases(self, as_of=None):
+        """Rank first releases in the current UTC month; as_of allows reproducible reports."""
+        if as_of is not None and (not isinstance(as_of, datetime) or
+                                  as_of.tzinfo is None or as_of.utcoffset() is None):
+            raise AppError('Use a timezone-aware timestamp for release rankings.')
+        return self.db.rows('''
+WITH clock AS (
+    SELECT COALESCE(%s::TIMESTAMPTZ,CURRENT_TIMESTAMP) AS as_of
+), month_bounds AS (
+    SELECT as_of, date_trunc('month',as_of) AS month_start FROM clock
+), first_releases AS (
+    SELECT game_id, MIN(release_date) AS release_date FROM "OnPlatform" GROUP BY game_id
+), new_games AS (
+    SELECT r.game_id, r.release_date
+    FROM first_releases r CROSS JOIN month_bounds b
+    WHERE r.release_date>=b.month_start::DATE
+      AND r.release_date<(b.month_start+INTERVAL '1 month')::DATE
+      AND r.release_date<=b.as_of::DATE
+), player_totals AS (
+    SELECT p.game_id, p.uid,
+           SUM(EXTRACT(EPOCH FROM (p.end_time-
+               GREATEST(p.start_time,b.month_start,r.release_date::TIMESTAMPTZ)))) AS play_seconds
+    FROM "Plays" p JOIN new_games r USING (game_id) CROSS JOIN month_bounds b
+    WHERE p.end_time>GREATEST(b.month_start,r.release_date::TIMESTAMPTZ)
+      AND p.end_time<=b.as_of AND p.start_time<p.end_time
+    GROUP BY p.game_id, p.uid
+), popularity AS (
+    SELECT game_id, COUNT(*) AS player_count,
+           SUM(LEAST(play_seconds,%s))::BIGINT AS capped_play_seconds
+    FROM player_totals GROUP BY game_id
+)
+SELECT g.game_id, g.game_name, r.release_date,
+       COALESCE(pop.player_count,0) AS player_count,
+       COALESCE(pop.capped_play_seconds,0)::BIGINT AS capped_play_seconds
+FROM new_games r JOIN "Game" g USING (game_id)
+LEFT JOIN popularity pop USING (game_id)
+ORDER BY player_count DESC, capped_play_seconds DESC, r.release_date DESC,
+         g.game_name ASC, g.game_id ASC
+LIMIT 5''', (as_of, POPULARITY_CAP_HOURS * 3600))
+
     def collections(self, uid):
         return self.db.rows('''
 WITH times AS (
