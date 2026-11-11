@@ -9,7 +9,8 @@ from pathlib import Path
 import psycopg
 
 from .db import Settings, SetupError, connect
-from .service import AppError, SearchFilters, Service, hours_minutes
+from .service import (AppError, SearchFilters, Service, hours_minutes,
+                      POPULARITY_DAYS, POPULARITY_CAP_HOURS)
 
 
 def number(prompt):
@@ -109,13 +110,14 @@ class Console:
         print('CSCI 320 Group 3 VGDB')
         while (user := self.login_menu()) is not None:
             while True:
-                choice = input('\n[v]iew profile [c]ollections [g]ames [p]lay [r]ate [s]ocial '
+                choice = input('\n[v]iew profile [t]op 20 popular [c]ollections [g]ames [p]lay [r]ate [s]ocial '
                                '[o]wned platforms [l]ogout [q]uit: ').strip().lower()
                 if choice == 'q':
                     return
                 if choice == 'l':
                     break
-                actions = {'v': self.profile, 'c': self.collections, 'g': self.games, 'p': self.play,
+                actions = {'v': self.profile, 't': self.popularity,
+                           'c': self.collections, 'g': self.games, 'p': self.play,
                            'r': self.rate, 's': self.social, 'o': self.platforms}
                 if choice not in actions:
                     print('Choose one of the listed letters.')
@@ -138,6 +140,18 @@ class Console:
             rating = f'{game["my_rating"]}/5' if game['my_rating'] is not None else 'Not rated'
             print(f'{rank}. {game["game_name"]} (ID {game["game_id"]}) | '
                   f'Your rating: {rating} | Playtime: {hours_minutes(game["play_seconds"])}')
+
+    def popularity(self, uid):
+        games = self.service.popular_games()
+        print(f'\nTop 20 popular games - last {POPULARITY_DAYS} days')
+        print(f'Ranked by distinct players, then playtime capped at {POPULARITY_CAP_HOURS} hours '
+              'per player per game.')
+        if not games:
+            print(f'No completed plays in the last {POPULARITY_DAYS} days.')
+        for rank, game in enumerate(games, 1):
+            print(f'{rank}. {game["game_name"]} (ID {game["game_id"]}) | '
+                  f'Players: {game["player_count"]} | '
+                  f'Capped playtime: {hours_minutes(game["capped_play_seconds"])}')
 
     def collections(self, uid):
         while True:

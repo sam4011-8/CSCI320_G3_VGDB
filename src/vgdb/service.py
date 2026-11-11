@@ -51,6 +51,9 @@ class SearchFilters:
 SORTS = {'name': 'g.game_name', 'price': 'offers.min_price',
          'genre': 'categories.first_genre', 'year': 'EXTRACT(YEAR FROM offers.release_date)'}
 
+POPULARITY_DAYS = 90
+POPULARITY_CAP_HOURS = 20
+
 
 def search_query(filters, uid, sort='default', descending=False, offset=0):
     filters.validate()
@@ -175,6 +178,30 @@ JOIN "Game" g USING (game_id)
 ORDER BY my_rating DESC NULLS LAST, play_seconds DESC, g.game_name ASC, g.game_id ASC
 LIMIT 10''', (uid, uid))
         return profile
+
+    def popular_games(self):
+        """Rank games by recent distinct players, then capped per-player playtime."""
+        return self.db.rows('''
+WITH window_bounds AS (
+    SELECT CURRENT_TIMESTAMP - (%s * INTERVAL '1 day') AS window_start,
+           CURRENT_TIMESTAMP AS window_end
+), player_totals AS (
+    SELECT p.game_id, p.uid,
+           SUM(EXTRACT(EPOCH FROM
+               (p.end_time-GREATEST(p.start_time,w.window_start)))) AS play_seconds
+    FROM "Plays" p CROSS JOIN window_bounds w
+    WHERE p.end_time>w.window_start AND p.end_time<=w.window_end
+      AND p.start_time<p.end_time
+    GROUP BY p.game_id, p.uid
+), popularity AS (
+    SELECT game_id, COUNT(*) AS player_count,
+           SUM(LEAST(play_seconds,%s))::BIGINT AS capped_play_seconds
+    FROM player_totals GROUP BY game_id
+)
+SELECT g.game_id, g.game_name, pop.player_count, pop.capped_play_seconds
+FROM popularity pop JOIN "Game" g USING (game_id)
+ORDER BY pop.player_count DESC, pop.capped_play_seconds DESC, g.game_name ASC, g.game_id ASC
+LIMIT 20''', (POPULARITY_DAYS, POPULARITY_CAP_HOURS * 3600))
 
     def collections(self, uid):
         return self.db.rows('''
