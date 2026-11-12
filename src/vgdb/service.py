@@ -179,8 +179,15 @@ ORDER BY my_rating DESC NULLS LAST, play_seconds DESC, g.game_name ASC, g.game_i
 LIMIT 10''', (uid, uid))
         return profile
 
-    def popular_games(self):
-        """Rank games by recent distinct players, then capped per-player playtime."""
+    def popular_games(self, followed_by=None):
+        """Rank recent games globally or among accounts followed by one user."""
+        params = [POPULARITY_DAYS]
+        follow_condition = ''
+        if followed_by is not None:
+            follow_condition = '''
+      AND EXISTS (SELECT 1 FROM "Following" f WHERE f.uid=%s AND f.followed_id=p.uid)'''
+            params.append(followed_by)
+        params.append(POPULARITY_CAP_HOURS * 3600)
         return self.db.rows('''
 WITH window_bounds AS (
     SELECT CURRENT_TIMESTAMP - (%s * INTERVAL '1 day') AS window_start,
@@ -191,7 +198,7 @@ WITH window_bounds AS (
                (p.end_time-GREATEST(p.start_time,w.window_start)))) AS play_seconds
     FROM "Plays" p CROSS JOIN window_bounds w
     WHERE p.end_time>w.window_start AND p.end_time<=w.window_end
-      AND p.start_time<p.end_time
+      AND p.start_time<p.end_time''' + follow_condition + '''
     GROUP BY p.game_id, p.uid
 ), popularity AS (
     SELECT game_id, COUNT(*) AS player_count,
@@ -201,7 +208,13 @@ WITH window_bounds AS (
 SELECT g.game_id, g.game_name, pop.player_count, pop.capped_play_seconds
 FROM popularity pop JOIN "Game" g USING (game_id)
 ORDER BY pop.player_count DESC, pop.capped_play_seconds DESC, g.game_name ASC, g.game_id ASC
-LIMIT 20''', (POPULARITY_DAYS, POPULARITY_CAP_HOURS * 3600))
+LIMIT 20''', tuple(params))
+
+    def followed_popular_games(self, uid):
+        """Count only completed plays from accounts directly followed by uid."""
+        if isinstance(uid, bool) or not isinstance(uid, int) or uid<=0:
+            raise AppError('A valid signed-in user is required for followed-user popularity.')
+        return self.popular_games(followed_by=uid)
 
     def new_releases(self, as_of=None):
         """Rank first releases in the current UTC month; as_of allows reproducible reports."""

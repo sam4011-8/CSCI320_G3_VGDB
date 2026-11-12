@@ -110,7 +110,7 @@ class Console:
         print('CSCI 320 Group 3 VGDB')
         while (user := self.login_menu()) is not None:
             while True:
-                choice = input('\n[v]iew profile [t]op 20 popular [n]ew releases '
+                choice = input('\n[v]iew profile [t]op 20 popular [f]ollowed top 20 [n]ew releases '
                                '[c]ollections [g]ames [p]lay [r]ate [s]ocial '
                                '[o]wned platforms [l]ogout [q]uit: ').strip().lower()
                 if choice == 'q':
@@ -118,6 +118,7 @@ class Console:
                 if choice == 'l':
                     break
                 actions = {'v': self.profile, 't': self.popularity, 'n': self.new_releases,
+                           'f': self.followed_popularity,
                            'c': self.collections, 'g': self.games, 'p': self.play,
                            'r': self.rate, 's': self.social, 'o': self.platforms}
                 if choice not in actions:
@@ -152,6 +153,18 @@ class Console:
         for rank, game in enumerate(games, 1):
             print(f'{rank}. {game["game_name"]} (ID {game["game_id"]}) | '
                   f'Players: {game["player_count"]} | '
+                  f'Capped playtime: {hours_minutes(game["capped_play_seconds"])}')
+
+    def followed_popularity(self, uid):
+        games = self.service.followed_popular_games(uid)
+        print(f'\nTop 20 popular games among people you follow - last {POPULARITY_DAYS} days')
+        print(f'Ranked by distinct followed players, then playtime capped at {POPULARITY_CAP_HOURS} hours '
+              'per player per game.')
+        if not games:
+            print(f'No completed plays from people you follow in the last {POPULARITY_DAYS} days.')
+        for rank, game in enumerate(games, 1):
+            print(f'{rank}. {game["game_name"]} (ID {game["game_id"]}) | '
+                  f'Players you follow: {game["player_count"]} | '
                   f'Capped playtime: {hours_minutes(game["capped_play_seconds"])}')
 
     def new_releases(self, uid):
