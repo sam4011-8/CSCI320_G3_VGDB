@@ -110,7 +110,8 @@ class Console:
         print('CSCI 320 Group 3 VGDB')
         while (user := self.login_menu()) is not None:
             while True:
-                choice = input('\n[v]iew profile [t]op 20 popular [f]ollowed top 20 [n]ew releases '
+                choice = input('\n[v]iew profile [d]iscover recommendations '
+                               '[t]op 20 popular [f]ollowed top 20 [n]ew releases '
                                '[c]ollections [g]ames [p]lay [r]ate [s]ocial '
                                '[o]wned platforms [l]ogout [q]uit: ').strip().lower()
                 if choice == 'q':
@@ -119,6 +120,7 @@ class Console:
                     break
                 actions = {'v': self.profile, 't': self.popularity, 'n': self.new_releases,
                            'f': self.followed_popularity,
+                           'd': self.recommendations,
                            'c': self.collections, 'g': self.games, 'p': self.play,
                            'r': self.rate, 's': self.social, 'o': self.platforms}
                 if choice not in actions:
@@ -178,6 +180,40 @@ class Console:
             print(f'{rank}. {game["game_name"]} (ID {game["game_id"]}) | '
                   f'Released: {game["release_date"]} | Players: {game["player_count"]} | '
                   f'Capped playtime: {hours_minutes(game["capped_play_seconds"])}')
+
+    def recommendations(self, uid):
+        games = self.service.recommendations(uid)
+        print('\nRecommended games - up to 10 you have not played')
+        if not games:
+            print('No unplayed, released games match your current settings.')
+            return
+        if games[0]['platform_filtered']:
+            print('Showing games released on platforms you own.')
+        else:
+            print('No owned platforms set; considering all released platforms.')
+        for rank, game in enumerate(games, 1):
+            if game['source'] in ('popular', 'catalog'):
+                if game['source']=='popular':
+                    label = 'Popular pick for your platforms' if game['platform_filtered'] else 'Popular pick'
+                    reasons = [f'{game["recent_player_count"]} players in the last {POPULARITY_DAYS} days',
+                               f'capped playtime {hours_minutes(game["capped_recent_seconds"])}']
+                else:
+                    label = 'Available game'
+                    reasons = ['No personalized match or recent popularity data']
+            else:
+                label = 'Personalized recommendation'
+                reasons = []
+                if game['matched_genres']:
+                    reasons.append('Matches genres: ' + game['matched_genres'])
+                if game['matched_contributors']:
+                    reasons.append('Matches contributors: ' + game['matched_contributors'])
+                if game['similar_player_count']:
+                    reasons.append(f'Played by {game["similar_player_count"]} similar players')
+                if game['followed_player_count']:
+                    reasons.append(f'including {game["followed_player_count"]} you follow')
+            print(f'{rank}. {game["game_name"]} (ID {game["game_id"]}) | {label}')
+            print('   Available on: ' + game['platforms'])
+            print('   Why: ' + '; '.join(reasons))
 
     def collections(self, uid):
         while True:

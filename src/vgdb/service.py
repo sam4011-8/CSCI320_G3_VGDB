@@ -5,6 +5,7 @@ from decimal import Decimal
 import re
 
 from .security import hash_password, verify_password, hasher
+from .recommendations import recommendation_query
 
 
 class AppError(ValueError):
@@ -255,6 +256,12 @@ LEFT JOIN popularity pop USING (game_id)
 ORDER BY player_count DESC, capped_play_seconds DESC, r.release_date DESC,
          g.game_name ASC, g.game_id ASC
 LIMIT 5''', (as_of, POPULARITY_CAP_HOURS * 3600))
+
+    def recommendations(self, uid):
+        if isinstance(uid, bool) or not isinstance(uid, int) or uid<=0:
+            raise AppError('A valid signed-in user is required for recommendations.')
+        query, params = recommendation_query(uid, POPULARITY_CAP_HOURS * 3600, POPULARITY_DAYS)
+        return self.db.rows(query, params)
 
     def collections(self, uid):
         return self.db.rows('''
